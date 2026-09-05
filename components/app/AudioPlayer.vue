@@ -70,7 +70,7 @@
           <span v-else class="material-symbols text-3xl text-white text-opacity-0">bookmark</span>
 
           <span class="font-mono text-fg-muted cursor-pointer" style="font-size: 1.35rem" @click="$emit('selectPlaybackSpeed')">{{ currentPlaybackRate }}x</span>
-          <span v-if="isAndroid && !isCasting" class="material-symbols text-3xl cursor-pointer" :class="playerSettings.volumeBoost > 0 ? 'text-success' : 'text-fg-muted'" @click.stop="showVolumeBoostModal = true">volume_up</span>
+          <span v-if="isAndroid && !isCasting" class="material-symbols text-3xl cursor-pointer" :class="appliedVolumeBoost > 0 ? 'text-success' : 'text-fg-muted'" @click.stop="showVolumeBoostModal = true">volume_up</span>
           <svg v-if="!sleepTimerRunning" xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-fg-muted cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" @click.stop="$emit('showSleepTimer')">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
           </svg>
@@ -125,8 +125,8 @@
 
     <!-- Chapters modal - lists chapters for navigation -->
     <modals-chapters-modal v-model="showChapterModal" :current-chapter="currentChapter" :chapters="chapters" :playback-rate="currentPlaybackRate" @select="selectChapter" />
-    <!-- Volume boost modal - Android only, gain applies to the local player -->
-    <modals-volume-boost-modal v-model="showVolumeBoostModal" :volume-boost="playerSettings.volumeBoost" @update:volumeBoost="setVolumeBoost" />
+    <!-- Volume boost modal -->
+    <modals-volume-boost-modal v-model="showVolumeBoostModal" :volume-boost="playerSettings.volumeBoost" :unavailable="volumeBoostUnavailable" @update:volumeBoost="setVolumeBoost" />
     <!-- More menu dialog - player settings and options -->
     <modals-dialog v-model="showMoreMenuDialog" :items="menuItems" width="80vw" @action="clickMenuAction" />
   </div>
@@ -158,6 +158,8 @@ export default {
       playbackSession: null,
       showChapterModal: false,
       showVolumeBoostModal: false,
+      appliedVolumeBoost: 0,
+      volumeBoostUnavailable: false,
       showFullscreen: false,
       totalDuration: 0,
       currentPlaybackRate: 1,
@@ -520,11 +522,22 @@ export default {
       this.updateTimestamp()
       AbsAudioPlayer.setPlaybackSpeed({ value: speed })
     },
-    setVolumeBoost(gainDb) {
+    async setVolumeBoost(gainDb) {
       console.log(`[AudioPlayer] Set Volume Boost: ${gainDb}`)
-      this.playerSettings.volumeBoost = gainDb
-      this.savePlayerSettings()
-      AbsAudioPlayer.setVolumeBoost({ value: gainDb })
+      try {
+        await AbsAudioPlayer.setVolumeBoost({ value: gainDb })
+        this.playerSettings.volumeBoost = gainDb
+        await this.savePlayerSettings()
+      } catch (error) {
+        this.onVolumeBoostChanged({ value: 0, unavailable: true })
+      }
+    },
+    onVolumeBoostChanged(data) {
+      if (data.unavailable && !this.volumeBoostUnavailable) {
+        this.$toast.error(this.$strings.MessageVolumeBoostUnavailable)
+      }
+      this.appliedVolumeBoost = data.value
+      this.volumeBoostUnavailable = data.unavailable
     },
     restart() {
       this.seek(0)
@@ -937,6 +950,9 @@ export default {
       AbsAudioPlayer.addListener('onProgressSyncFailing', this.showProgressSyncIsFailing)
       AbsAudioPlayer.addListener('onProgressSyncSuccess', this.showProgressSyncSuccess)
       AbsAudioPlayer.addListener('onPlaybackSpeedChanged', this.onPlaybackSpeedChanged)
+      if (this.isAndroid) {
+        AbsAudioPlayer.addListener('onVolumeBoostChanged', this.onVolumeBoostChanged)
+      }
     },
     async screenOrientationChange() {
       if (this.isRefreshingUI) return

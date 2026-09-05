@@ -8,6 +8,7 @@
 
     <div class="w-full h-full overflow-hidden absolute top-0 left-0 flex items-center justify-center">
       <div class="w-full overflow-x-hidden overflow-y-auto bg-primary rounded-lg border border-border" style="max-height: 75%" @click.stop>
+        <p v-if="unavailable" class="p-3 text-fg-muted text-sm" role="status">{{ $strings.MessageVolumeBoostUnavailable }}</p>
         <ul class="w-full" role="listbox" aria-labelledby="listbox-label">
           <template v-for="gain in gains">
             <li :key="gain" class="text-fg select-none relative py-4" :class="gain === selected ? 'bg-bg-hover/50' : ''" role="option" @click="clickedOption(gain)">
@@ -37,6 +38,7 @@
 export default {
   props: {
     value: Boolean,
+    unavailable: Boolean,
     volumeBoost: Number
   },
   data() {

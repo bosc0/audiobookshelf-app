@@ -114,7 +114,14 @@ class AbsAudioPlayer : Plugin() {
         override fun onPlaybackSpeedChanged(playbackSpeed:Float) {
           emit("onPlaybackSpeedChanged", playbackSpeed)
         }
+
+        override fun onVolumeBoostChanged(gainDb: Int, unavailable: Boolean) {
+          val result = JSObject().put("value", gainDb).put("unavailable", unavailable)
+          notifyListeners("onVolumeBoostChanged", result, true)
+        }
       })
+
+      playerNotificationService.sendVolumeBoostStatus()
 
       MediaEventManager.clientEventEmitter = playerNotificationService.clientEventEmitter
     }
@@ -366,8 +373,11 @@ class AbsAudioPlayer : Plugin() {
     val gainDb:Int = call.getInt("value", 0) ?: 0
 
     Handler(Looper.getMainLooper()).post {
-      playerNotificationService.setVolumeBoost(gainDb)
-      call.resolve()
+      if (playerNotificationService.setVolumeBoost(gainDb)) {
+        call.resolve()
+      } else {
+        call.reject("Volume boost is unavailable", "VOLUME_BOOST_UNAVAILABLE")
+      }
     }
   }
 

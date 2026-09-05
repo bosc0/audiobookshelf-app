@@ -115,8 +115,6 @@ class MediaManager(private var apiHandler: ApiHandler, var ctx: Context) {
     return 1f
   }
 
-  // Volume boost is saved by the web app in the playerSettings preference.
-  // Read it here so sessions started without the webview (Android Auto, media button) get the boost.
   fun getSavedVolumeBoostDb(): Int {
     val sharedPrefs = ctx.getSharedPreferences("CapacitorStorage", Activity.MODE_PRIVATE)
     val playerSettingsPref = sharedPrefs?.getString("playerSettings", null) ?: return 0
