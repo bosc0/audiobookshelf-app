@@ -362,6 +362,16 @@ class AbsAudioPlayer : Plugin() {
   }
 
   @PluginMethod
+  fun setVolumeBoost(call: PluginCall) {
+    val gainDb:Int = call.getInt("value", 0) ?: 0
+
+    Handler(Looper.getMainLooper()).post {
+      playerNotificationService.setVolumeBoost(gainDb)
+      call.resolve()
+    }
+  }
+
+  @PluginMethod
   fun closePlayback(call: PluginCall) {
     Handler(Looper.getMainLooper()).post {
       playerNotificationService.closePlayback()

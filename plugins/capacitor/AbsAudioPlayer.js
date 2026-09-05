@@ -154,6 +154,11 @@ class AbsAudioPlayerWeb extends WebPlugin {
   }
 
   // PluginMethod
+  setVolumeBoost({ value }) {
+    // Volume boost is only supported on the Android native player
+  }
+
+  // PluginMethod
   setChapterTrack({ enabled }) {
     this.useChapterTrack = enabled
   }

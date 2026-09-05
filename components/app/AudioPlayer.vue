@@ -62,7 +62,7 @@
     </div>
 
     <div id="playerContent" class="playerContainer w-full z-20 absolute bottom-0 left-0 right-0 p-2 pointer-events-auto transition-all" :style="{ backgroundColor: showFullscreen ? '' : coverRgb }" @click="clickContainer">
-      <!-- Top controls bar - fullscreen only: bookmarks, speed, sleep timer, chapters -->
+      <!-- Top controls bar - fullscreen only: bookmarks, speed, volume boost, sleep timer, chapters -->
       <div v-if="showFullscreen" class="absolute bottom-4 left-0 right-0 w-full pb-4 pt-2 mx-auto px-6" style="max-width: 414px">
         <div class="flex items-center justify-between pointer-events-auto">
           <span v-if="!isPodcast && serverLibraryItemId && socketConnected" class="material-symbols text-3xl text-fg-muted cursor-pointer" :class="{ fill: bookmarks.length }" @click="$emit('showBookmarks')">bookmark</span>
@@ -70,6 +70,7 @@
           <span v-else class="material-symbols text-3xl text-white text-opacity-0">bookmark</span>
 
           <span class="font-mono text-fg-muted cursor-pointer" style="font-size: 1.35rem" @click="$emit('selectPlaybackSpeed')">{{ currentPlaybackRate }}x</span>
+          <span v-if="isAndroid && !isCasting" class="material-symbols text-3xl cursor-pointer" :class="playerSettings.volumeBoost > 0 ? 'text-success' : 'text-fg-muted'" @click.stop="showVolumeBoostModal = true">volume_up</span>
           <svg v-if="!sleepTimerRunning" xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-fg-muted cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" @click.stop="$emit('showSleepTimer')">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
           </svg>
@@ -124,6 +125,8 @@
 
     <!-- Chapters modal - lists chapters for navigation -->
     <modals-chapters-modal v-model="showChapterModal" :current-chapter="currentChapter" :chapters="chapters" :playback-rate="currentPlaybackRate" @select="selectChapter" />
+    <!-- Volume boost modal - Android only, gain applies to the local player -->
+    <modals-volume-boost-modal v-model="showVolumeBoostModal" :volume-boost="playerSettings.volumeBoost" @update:volumeBoost="setVolumeBoost" />
     <!-- More menu dialog - player settings and options -->
     <modals-dialog v-model="showMoreMenuDialog" :items="menuItems" width="80vw" @action="clickMenuAction" />
   </div>
@@ -154,6 +157,7 @@ export default {
       windowWidth: 0,
       playbackSession: null,
       showChapterModal: false,
+      showVolumeBoostModal: false,
       showFullscreen: false,
       totalDuration: 0,
       currentPlaybackRate: 1,
@@ -173,7 +177,8 @@ export default {
         useChapterTrack: false,
         useTotalTrack: true,
         scaleElapsedTimeBySpeed: true,
-        lockUi: false
+        lockUi: false,
+        volumeBoost: 0
       },
       isLoading: false,
       isCheckingServerProgress: false,
@@ -205,6 +210,10 @@ export default {
   computed: {
     theme() {
       return document.documentElement.dataset.theme || 'dark'
+    },
+    // TODO: Implement volume boost on iOS
+    isAndroid() {
+      return this.$platform === 'android'
     },
     menuItems() {
       const items = []
@@ -510,6 +519,12 @@ export default {
       this.currentPlaybackRate = speed
       this.updateTimestamp()
       AbsAudioPlayer.setPlaybackSpeed({ value: speed })
+    },
+    setVolumeBoost(gainDb) {
+      console.log(`[AudioPlayer] Set Volume Boost: ${gainDb}`)
+      this.playerSettings.volumeBoost = gainDb
+      this.savePlayerSettings()
+      AbsAudioPlayer.setVolumeBoost({ value: gainDb })
     },
     restart() {
       this.seek(0)
@@ -840,6 +855,7 @@ export default {
         this.playerSettings.useTotalTrack = !!savedPlayerSettings.useTotalTrack
         this.playerSettings.lockUi = !!savedPlayerSettings.lockUi
         this.playerSettings.scaleElapsedTimeBySpeed = !!savedPlayerSettings.scaleElapsedTimeBySpeed
+        this.playerSettings.volumeBoost = Number(savedPlayerSettings.volumeBoost) || 0
       }
     },
     savePlayerSettings() {

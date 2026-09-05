@@ -20,6 +20,7 @@ import android.support.v4.media.session.MediaControllerCompat
 import android.support.v4.media.session.MediaSessionCompat
 import androidx.media.VolumeProviderCompat
 import android.media.AudioManager
+import android.media.audiofx.LoudnessEnhancer
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import androidx.annotation.RequiresApi
@@ -110,6 +111,9 @@ class PlayerNotificationService : MediaBrowserServiceCompat() {
   lateinit var mPlayer: ExoPlayer
   lateinit var currentPlayer: Player
   var castPlayer: CastPlayer? = null
+
+  private var loudnessEnhancer: LoudnessEnhancer? = null
+  private var volumeBoostGainMb: Int = 0
 
   lateinit var sleepTimerManager: SleepTimerManager
   lateinit var mediaProgressSyncer: MediaProgressSyncer
@@ -202,6 +206,8 @@ class PlayerNotificationService : MediaBrowserServiceCompat() {
     DeviceManager.widgetUpdater?.onPlayerChanged(this)
 
     playerNotificationManager.setPlayer(null)
+    loudnessEnhancer?.release()
+    loudnessEnhancer = null
     mPlayer.release()
     castPlayer?.release()
     mediaSession.release()
@@ -493,6 +499,8 @@ class PlayerNotificationService : MediaBrowserServiceCompat() {
     }
 
     if (mPlayer == currentPlayer) {
+      setVolumeBoost(mediaManager.getSavedVolumeBoostDb())
+
       val mediaSource: MediaSource
 
       if (playbackSession.isLocal) {
@@ -1022,6 +1030,44 @@ class PlayerNotificationService : MediaBrowserServiceCompat() {
 
     // Refresh Android Auto actions
     mediaProgressSyncer.currentPlaybackSession?.let { setMediaSessionConnectorCustomActions(it) }
+  }
+
+  // Volume boost only applies to the local ExoPlayer, not to cast playback
+  fun setVolumeBoost(gainDb: Int) {
+    volumeBoostGainMb = gainDb * 100
+    Log.d(tag, "setVolumeBoost ${volumeBoostGainMb}mB")
+    if (loudnessEnhancer == null) {
+      if (volumeBoostGainMb > 0) attachLoudnessEnhancer(mPlayer.audioSessionId)
+    } else {
+      applyVolumeBoost()
+    }
+  }
+
+  fun onAudioSessionIdChanged(audioSessionId: Int) {
+    if (loudnessEnhancer == null && volumeBoostGainMb == 0) return
+    attachLoudnessEnhancer(audioSessionId)
+  }
+
+  private fun attachLoudnessEnhancer(audioSessionId: Int) {
+    if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+    try {
+      loudnessEnhancer?.release()
+      loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+      applyVolumeBoost()
+    } catch (e: Exception) {
+      // The LoudnessEnhancer audio effect is not supported on all devices
+      Log.e(tag, "Failed to create LoudnessEnhancer for audio session $audioSessionId $e")
+      loudnessEnhancer = null
+    }
+  }
+
+  private fun applyVolumeBoost() {
+    try {
+      loudnessEnhancer?.setTargetGain(volumeBoostGainMb)
+      loudnessEnhancer?.setEnabled(volumeBoostGainMb > 0)
+    } catch (e: Exception) {
+      Log.e(tag, "Failed to apply volume boost gain ${volumeBoostGainMb}mB $e")
+    }
   }
 
   fun closePlayback(calledOnError: Boolean? = false) {
